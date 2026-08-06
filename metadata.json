@@ -1,0 +1,6 @@
+{
+  "name": "Apex Analytics",
+  "description": "A luxury dark-themed live analytics and performance dashboard with subtle ruby/wine gradients and deep contrast elements.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,122 @@
+{
+  "refundRequests": {
+    "teste@hero.com": {
+      "id": "8bb07ff2-b10c-43de-9198-23db02960ecb",
+      "email": "teste@hero.com",
+      "motivo": "Produto não atendeu às expectativas",
+      "dataSolicitacao": 1785761554947,
+      "status": "reembolso_solicitado",
+      "pix": "teste@pix.com",
+      "feedbackFinal": "Plataforma ótima, atendimento rápido!",
+      "dataEnvioPix": 1786020814955,
+      "createdAt": "2026-08-06T12:53:34.936Z",
+      "updatedAt": "2026-08-06T12:53:34.955Z"
+    },
+    "pedro@compra.com": {
+      "id": "de1f931a-d4af-442d-abe8-e2d7394bfc07",
+      "email": "pedro@compra.com",
+      "motivo": "Produto não funcionou como esperado",
+      "dataSolicitacao": 1785761698872,
+      "status": "reembolso_solicitado",
+      "pix": "123.456.789-00",
+      "feedbackFinal": "Design muito bonito e fluxo prático!",
+      "dataEnvioPix": 1786020958880,
+      "createdAt": "2026-08-06T12:55:58.862Z",
+      "updatedAt": "2026-08-06T12:55:58.880Z"
+    },
+    "pedrooff280@gmail.com": {
+      "id": "cd9e7e3e-d4b5-42df-a279-add9473a1d63",
+      "email": "pedrooff280@gmail.com",
+      "motivo": "Desisti dentro do prazo de garantia",
+      "dataSolicitacao": 1785762203366,
+      "status": "pix_enviado",
+      "pix": "dv",
+      "feedbackFinal": "f",
+      "dataEnvioPix": 1785589833645,
+      "createdAt": "2026-08-06T12:56:39.081Z",
+      "updatedAt": "2026-08-06T13:11:33.645Z"
+    },
+    "comprador@hero.com": {
+      "id": "6440dd49-9bd5-410e-b193-fa9dced9f706",
+      "email": "comprador@hero.com",
+      "motivo": "Garantia",
+      "dataSolicitacao": 1785762548849,
+      "status": "reembolso_solicitado",
+      "pix": "pix@comprador.com",
+      "feedbackFinal": "Ótimo atendimento",
+      "dataEnvioPix": 1786021808857,
+      "createdAt": "2026-08-06T13:10:08.839Z",
+      "updatedAt": "2026-08-06T13:10:08.857Z"
+    },
+    "comprador2@hero.com": {
+      "id": "89bf1215-d9b7-4ec9-bcda-d89d891da51d",
+      "email": "comprador2@hero.com",
+      "orderId": "HERO-200",
+      "motivo": "Garantia",
+      "details": "",
+      "dataSolicitacao": 1785762575818,
+      "status": "pix_enviado",
+      "pix": "pix2@comprador.com",
+      "feedbackFinal": "Ótimo produto",
+      "dataEnvioPix": 1785589775841,
+      "createdAt": "2026-08-06T13:10:35.803Z",
+      "updatedAt": "2026-08-06T13:10:35.841Z"
+    },
+    "jjlj@gmail.com": {
+      "id": "1ecbbe9c-e5e6-47d2-abfb-f0c2aa0e09da",
+      "email": "jjlj@gmail.com",
+      "orderId": "lsdednekd",
+      "motivo": "Desisti dentro do prazo de garantia",
+      "details": "k",
+      "dataSolicitacao": 1785762712960,
+      "status": "pix_enviado",
+      "pix": "ini",
+      "feedbackFinal": "lj",
+      "dataEnvioPix": 1785590376960,
+      "createdAt": "2026-08-06T13:12:50.211Z",
+      "updatedAt": "2026-08-06T13:20:36.960Z"
+    },
+    "usuario@hero.com": {
+      "id": "d060d658-5b8a-4256-824d-c56a18533d8e",
+      "email": "usuario@hero.com",
+      "orderId": "HERO-300",
+      "motivo": "Garantia",
+      "details": "",
+      "dataSolicitacao": 1785763152351,
+      "status": "pix_enviado",
+      "pix": "pix@hero.com",
+      "feedbackFinal": "Solicito ressarcimento",
+      "dataEnvioPix": 1785590352374,
+      "createdAt": "2026-08-06T13:20:12.342Z",
+      "updatedAt": "2026-08-06T13:20:12.374Z"
+    },
+    "nlodfen@gmail.comw": {
+      "id": "97d1a73b-8a4d-4a49-8a38-2f72a0426780",
+      "email": "nlodfen@gmail.comw",
+      "orderId": "dwd",
+      "motivo": "Produto não funcionou como esperado",
+      "details": "wdqd",
+      "dataSolicitacao": 1786024162994,
+      "status": "aguardando_documentos",
+      "pix": null,
+      "feedbackFinal": null,
+      "dataEnvioPix": null,
+      "createdAt": "2026-08-06T13:49:22.994Z",
+      "updatedAt": "2026-08-06T13:49:22.994Z"
+    },
+    "ygutf@gmail.com": {
+      "id": "133faf3b-e84e-425d-96d1-ae9ea7200f8f",
+      "email": "ygutf@gmail.com",
+      "orderId": ";km",
+      "motivo": "Produto não funcionou como esperado",
+      "details": "",
+      "dataSolicitacao": 1785769050048,
+      "status": "pix_enviado",
+      "pix": "ljip",
+      "feedbackFinal": ";knn",
+      "dataEnvioPix": 1785596263113,
+      "createdAt": "2026-08-06T14:58:17.565Z",
+      "updatedAt": "2026-08-06T14:58:43.113Z"
+    }
+  }
+}
