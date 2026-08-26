@@ -117,6 +117,20 @@
       "dataEnvioPix": 1785596263113,
       "createdAt": "2026-08-06T14:58:17.565Z",
       "updatedAt": "2026-08-06T14:58:43.113Z"
+    },
+    "dvsfvs@gmail.com": {
+      "id": "efe8dc07-0221-46de-afa3-58670103e22d",
+      "email": "dvsfvs@gmail.com",
+      "orderId": "dekjfnef",
+      "motivo": "Produto não funcionou como esperado",
+      "details": "",
+      "dataSolicitacao": 1787777582675,
+      "status": "aguardando_documentos",
+      "pix": null,
+      "feedbackFinal": null,
+      "dataEnvioPix": null,
+      "createdAt": "2026-08-26T20:53:02.675Z",
+      "updatedAt": "2026-08-26T20:53:02.675Z"
     }
   }
 }

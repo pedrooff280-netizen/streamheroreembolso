@@ -27,11 +27,11 @@ export interface RefundRecord {
   orderId: string;
   motivo: string;
   details?: string;
-  dataSolicitacao: number;
+  dataSolicitacao: number | string;
   status: 'aguardando_documentos' | 'pix_enviado' | 'reembolso_concluido';
   pix: string | null;
   feedbackFinal: string | null;
-  dataEnvioPix: number | null;
+  dataEnvioPix: number | string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,6 +46,16 @@ const reasonMap: Record<string, string> = {
   garantia: 'Desisti dentro do prazo de garantia',
   outro: 'Outro motivo'
 };
+
+function parseTimestamp(val: any): number {
+  if (!val) return 0;
+  if (typeof val === 'number' && !isNaN(val) && val > 0) return val;
+  const num = Number(val);
+  if (!isNaN(num) && num > 0) return num;
+  const dateNum = new Date(val).getTime();
+  if (!isNaN(dateNum) && dateNum > 0) return dateNum;
+  return 0;
+}
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'reembolso' | 'termos'>('reembolso');
@@ -74,6 +84,8 @@ export default function App() {
   const [requestRecord, setRequestRecord] = useState<RefundRecord | null>(null);
   const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
   const [now, setNow] = useState<number>(Date.now());
+  const [serverCanAdvanceToPix, setServerCanAdvanceToPix] = useState<boolean>(false);
+  const [serverIsPixCompleted, setServerIsPixCompleted] = useState<boolean>(false);
 
   const toggleTheme = () => {
     setIsDarkMode((prev) => {
@@ -116,9 +128,16 @@ export default function App() {
       if (data.found && data.request) {
         setRequestRecord(data.request);
         setOrderId(data.request.orderId || orderId);
+        setServerCanAdvanceToPix(Boolean(data.canAdvanceToPix));
+        setServerIsPixCompleted(Boolean(data.isPixCompleted));
+        if (data.serverTime) {
+          setServerTimeOffset(data.serverTime - Date.now());
+        }
         setCurrentStep(4);
       } else {
         setRequestRecord(null);
+        setServerCanAdvanceToPix(false);
+        setServerIsPixCompleted(false);
       }
     } catch (err: any) {
       console.error(err);
@@ -142,8 +161,8 @@ export default function App() {
   }, [serverTimeOffset]);
 
   const serverNow = now;
-  const dataSolicitacao = requestRecord?.dataSolicitacao || 0;
-  const elapsedMs = Math.max(0, serverNow - dataSolicitacao);
+  const dataSolicitacao = parseTimestamp(requestRecord?.dataSolicitacao);
+  const elapsedMs = dataSolicitacao > 0 ? Math.max(0, serverNow - dataSolicitacao) : 0;
   const remainingMs = Math.max(0, SEVENTY_TWO_HOURS_MS - elapsedMs);
 
   const totalSeconds72h = Math.floor(remainingMs / 1000);
@@ -151,10 +170,13 @@ export default function App() {
   const minutes72h = Math.floor((totalSeconds72h % 3600) / 60);
   const seconds72h = totalSeconds72h % 60;
 
-  const isTimer72hCompleted = requestRecord?.status === 'aguardando_documentos' && remainingMs <= 0;
+  // 72h completion logic: true if server flag is true OR remaining time is <= 0 OR elapsed time >= 72h
+  const isTimer72hCompleted =
+    requestRecord?.status === 'aguardando_documentos' &&
+    (serverCanAdvanceToPix || remainingMs <= 0 || (dataSolicitacao > 0 && elapsedMs >= SEVENTY_TWO_HOURS_MS));
 
-  const dataEnvioPix = requestRecord?.dataEnvioPix || 0;
-  const elapsedPixMs = Math.max(0, serverNow - dataEnvioPix);
+  const dataEnvioPix = parseTimestamp(requestRecord?.dataEnvioPix);
+  const elapsedPixMs = dataEnvioPix > 0 ? Math.max(0, serverNow - dataEnvioPix) : 0;
   const remainingPixMs = Math.max(0, FIVE_DAYS_MS - elapsedPixMs);
 
   const totalSecondsPix = Math.floor(remainingPixMs / 1000);
@@ -163,7 +185,10 @@ export default function App() {
   const minutesPix = Math.floor((totalSecondsPix % 3600) / 60);
   const secondsPix = totalSecondsPix % 60;
 
-  const isPix5DaysCompleted = (requestRecord?.status === 'pix_enviado' || requestRecord?.status === 'reembolso_concluido') && remainingPixMs <= 0;
+  // 5-day PIX completion logic: true if server flag is true OR remaining time <= 0 OR elapsed time >= 5 days
+  const isPix5DaysCompleted =
+    (requestRecord?.status === 'pix_enviado' || requestRecord?.status === 'reembolso_concluido') &&
+    (serverIsPixCompleted || remainingPixMs <= 0 || (dataEnvioPix > 0 && elapsedPixMs >= FIVE_DAYS_MS));
 
   const formatTimerPill72h = () => {
     const hh = String(hours72h).padStart(2, '0');
@@ -211,9 +236,16 @@ export default function App() {
 
       if (data.found && data.request) {
         setRequestRecord(data.request);
+        setServerCanAdvanceToPix(Boolean(data.canAdvanceToPix));
+        setServerIsPixCompleted(Boolean(data.isPixCompleted));
+        if (data.serverTime) {
+          setServerTimeOffset(data.serverTime - Date.now());
+        }
         setCurrentStep(4);
       } else {
         setRequestRecord(null);
+        setServerCanAdvanceToPix(false);
+        setServerIsPixCompleted(false);
         setCurrentStep(2);
       }
     } catch (err: any) {
@@ -254,6 +286,11 @@ export default function App() {
       if (!res.ok) throw new Error(data.error || 'Erro ao criar solicitação.');
 
       setRequestRecord(data.request);
+      setServerCanAdvanceToPix(false);
+      setServerIsPixCompleted(false);
+      if (data.serverTime) {
+        setServerTimeOffset(data.serverTime - Date.now());
+      }
       setCurrentStep(4);
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao salvar solicitação.');
@@ -287,6 +324,10 @@ export default function App() {
       if (!res.ok) throw new Error(data.error || 'Erro ao finalizar solicitação.');
 
       setRequestRecord(data.request);
+      setServerIsPixCompleted(false);
+      if (data.serverTime) {
+        setServerTimeOffset(data.serverTime - Date.now());
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro ao finalizar solicitação.');
     } finally {
@@ -296,6 +337,8 @@ export default function App() {
 
   const handleResetSession = () => {
     setRequestRecord(null);
+    setServerCanAdvanceToPix(false);
+    setServerIsPixCompleted(false);
     setCurrentStep(1);
     setEmail('');
     setOrderId('');
@@ -902,7 +945,7 @@ export default function App() {
 
                         {/* Intro Paragraph */}
                         <p className="text-sm sm:text-base leading-relaxed text-[#374151]">
-                          Entendemos que mudanças de ideia acontecem 🧡 Mas é importante saber que nem todo conteúdo permite reembolso — e a gente te explica o motivo com transparência e base legal.
+                          Entendemos que mudanças de ideia podem acontecer 🧡 Mas é importante saber que nem todo conteúdo permite reembolso — e a gente te explica o motivo com transparência e base legal.
                         </p>
 
                         <div className="h-px bg-[#F97316]/30 w-full my-4" />

@@ -8,7 +8,11 @@ const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 
-const dbPath = path.join(process.cwd(), 'refunds.json');
+// Persistent database path (uses local refunds.json or /tmp/refunds.json)
+const isVercel = process.env.VERCEL === '1';
+const dbPath = isVercel
+  ? path.join('/tmp', 'refunds.json')
+  : path.join(process.cwd(), 'refunds.json');
 
 export interface RefundRequestRecord {
   id: string;
@@ -27,6 +31,16 @@ export interface RefundRequestRecord {
 
 interface DatabaseSchema {
   refundRequests: Record<string, RefundRequestRecord>; // keyed by normalized email
+}
+
+function parseTimestamp(val: any): number {
+  if (!val) return 0;
+  if (typeof val === 'number' && !isNaN(val) && val > 0) return val;
+  const num = Number(val);
+  if (!isNaN(num) && num > 0) return num;
+  const dateNum = new Date(val).getTime();
+  if (!isNaN(dateNum) && dateNum > 0) return dateNum;
+  return 0;
 }
 
 function loadDatabase(): DatabaseSchema {
@@ -78,7 +92,9 @@ app.post('/api/refunds/lookup', (req, res) => {
     }
 
     const cleanEmail = normalizeEmail(email);
-    const request = db.refundRequests[cleanEmail] || null;
+    // Reload database on every lookup to guarantee fresh data
+    const freshDb = loadDatabase();
+    const request = freshDb.refundRequests[cleanEmail] || db.refundRequests[cleanEmail] || null;
     const serverTime = Date.now();
 
     if (!request) {
@@ -88,7 +104,8 @@ app.post('/api/refunds/lookup', (req, res) => {
       });
     }
 
-    const elapsedMs = serverTime - request.dataSolicitacao;
+    const dataSolicitacao = parseTimestamp(request.dataSolicitacao);
+    const elapsedMs = Math.max(0, serverTime - dataSolicitacao);
     const remainingMs = Math.max(0, SEVENTY_TWO_HOURS_MS - elapsedMs);
     const canAdvanceToPix = request.status === 'aguardando_documentos' && elapsedMs >= SEVENTY_TWO_HOURS_MS;
 
@@ -97,7 +114,8 @@ app.post('/api/refunds/lookup', (req, res) => {
     let isPixCompleted = false;
 
     if (request.dataEnvioPix) {
-      elapsedPixMs = serverTime - request.dataEnvioPix;
+      const dataEnvioPix = parseTimestamp(request.dataEnvioPix);
+      elapsedPixMs = Math.max(0, serverTime - dataEnvioPix);
       remainingPixMs = Math.max(0, FIVE_DAYS_MS - elapsedPixMs);
       isPixCompleted = elapsedPixMs >= FIVE_DAYS_MS;
     }
@@ -132,10 +150,11 @@ app.post('/api/refunds/create', (req, res) => {
       return res.status(400).json({ error: 'E-mail inválido.' });
     }
 
-    if (db.refundRequests[cleanEmail]) {
+    const freshDb = loadDatabase();
+    if (freshDb.refundRequests[cleanEmail]) {
       return res.status(400).json({
         error: 'Já existe uma solicitação registrada para este e-mail.',
-        request: db.refundRequests[cleanEmail],
+        request: freshDb.refundRequests[cleanEmail],
       });
     }
 
@@ -158,8 +177,9 @@ app.post('/api/refunds/create', (req, res) => {
       updatedAt: nowIso,
     };
 
+    freshDb.refundRequests[cleanEmail] = newRecord;
     db.refundRequests[cleanEmail] = newRecord;
-    saveDatabase(db);
+    saveDatabase(freshDb);
 
     return res.json({
       success: true,
@@ -183,14 +203,16 @@ app.post('/api/refunds/finalize', (req, res) => {
     }
 
     const cleanEmail = normalizeEmail(email);
-    const record = db.refundRequests[cleanEmail];
+    const freshDb = loadDatabase();
+    const record = freshDb.refundRequests[cleanEmail] || db.refundRequests[cleanEmail];
 
     if (!record) {
       return res.status(404).json({ error: 'Solicitação não encontrada para este e-mail.' });
     }
 
     const serverTime = Date.now();
-    const elapsedMs = serverTime - record.dataSolicitacao;
+    const dataSolicitacao = parseTimestamp(record.dataSolicitacao);
+    const elapsedMs = serverTime - dataSolicitacao;
 
     if (elapsedMs < SEVENTY_TWO_HOURS_MS) {
       return res.status(403).json({
@@ -207,7 +229,9 @@ app.post('/api/refunds/finalize', (req, res) => {
     record.status = 'pix_enviado';
     record.updatedAt = nowIso;
 
-    saveDatabase(db);
+    freshDb.refundRequests[cleanEmail] = record;
+    db.refundRequests[cleanEmail] = record;
+    saveDatabase(freshDb);
 
     return res.json({
       success: true,
@@ -230,7 +254,8 @@ app.post('/api/refunds/dev-simulate-72h', (req, res) => {
     }
 
     const cleanEmail = normalizeEmail(email);
-    const record = db.refundRequests[cleanEmail];
+    const freshDb = loadDatabase();
+    const record = freshDb.refundRequests[cleanEmail] || db.refundRequests[cleanEmail];
 
     if (!record) {
       return res.status(404).json({ error: 'Solicitação não encontrada.' });
@@ -239,7 +264,9 @@ app.post('/api/refunds/dev-simulate-72h', (req, res) => {
     record.dataSolicitacao = Date.now() - (SEVENTY_TWO_HOURS_MS + 60000);
     record.updatedAt = new Date().toISOString();
 
-    saveDatabase(db);
+    freshDb.refundRequests[cleanEmail] = record;
+    db.refundRequests[cleanEmail] = record;
+    saveDatabase(freshDb);
 
     return res.json({
       success: true,
@@ -262,7 +289,8 @@ app.post('/api/refunds/dev-simulate-5days', (req, res) => {
     }
 
     const cleanEmail = normalizeEmail(email);
-    const record = db.refundRequests[cleanEmail];
+    const freshDb = loadDatabase();
+    const record = freshDb.refundRequests[cleanEmail] || db.refundRequests[cleanEmail];
 
     if (!record) {
       return res.status(404).json({ error: 'Solicitação não encontrada.' });
@@ -271,7 +299,9 @@ app.post('/api/refunds/dev-simulate-5days', (req, res) => {
     record.dataEnvioPix = Date.now() - (FIVE_DAYS_MS + 60000);
     record.updatedAt = new Date().toISOString();
 
-    saveDatabase(db);
+    freshDb.refundRequests[cleanEmail] = record;
+    db.refundRequests[cleanEmail] = record;
+    saveDatabase(freshDb);
 
     return res.json({
       success: true,
