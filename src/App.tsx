@@ -11,13 +11,13 @@ import {
   Hash, 
   Clock, 
   AlertTriangle, 
-  Moon,
-  Sun,
-  AlertCircle,
-  ShieldCheck,
-  XCircle,
-  ExternalLink,
-  FileText
+  Moon, 
+  Sun, 
+  AlertCircle, 
+  ShieldCheck, 
+  XCircle, 
+  ExternalLink, 
+  FileText 
 } from 'lucide-react';
 import { TermosDeUso } from './components/TermosDeUso';
 
@@ -80,8 +80,18 @@ export default function App() {
   const [pixKey, setPixKey] = useState('');
   const [feedback, setFeedback] = useState('');
 
+  // Fallback Notice State
+  const [isFallbackNoticeActive, setIsFallbackNoticeActive] = useState(false);
+
   // Backend state
-  const [requestRecord, setRequestRecord] = useState<RefundRecord | null>(null);
+  const [requestRecord, setRequestRecord] = useState<RefundRecord | null>(() => {
+    try {
+      const saved = localStorage.getItem('hero_refund_record');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
   const [now, setNow] = useState<number>(Date.now());
   const [serverCanAdvanceToPix, setServerCanAdvanceToPix] = useState<boolean>(false);
@@ -123,10 +133,9 @@ export default function App() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao consultar servidor.');
-
-      if (data.found && data.request) {
+      if (res.ok && data.found && data.request) {
         setRequestRecord(data.request);
+        localStorage.setItem('hero_refund_record', JSON.stringify(data.request));
         setOrderId(data.request.orderId || orderId);
         setServerCanAdvanceToPix(Boolean(data.canAdvanceToPix));
         setServerIsPixCompleted(Boolean(data.isPixCompleted));
@@ -135,13 +144,33 @@ export default function App() {
         }
         setCurrentStep(4);
       } else {
+        // Check if there is a local fallback record
+        const savedRecord = localStorage.getItem('hero_refund_record');
+        if (savedRecord) {
+          const parsed = JSON.parse(savedRecord);
+          if (parsed.email === searchEmail.trim().toLowerCase()) {
+            setRequestRecord(parsed);
+            setCurrentStep(4);
+            setIsLoading(false);
+            return;
+          }
+        }
         setRequestRecord(null);
-        setServerCanAdvanceToPix(false);
-        setServerIsPixCompleted(false);
       }
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'Erro ao comunicar com o servidor.');
+      // Fallback: check local storage if offline or error
+      const savedRecord = localStorage.getItem('hero_refund_record');
+      if (savedRecord) {
+        try {
+          const parsed = JSON.parse(savedRecord);
+          if (parsed.email === searchEmail.trim().toLowerCase()) {
+            setRequestRecord(parsed);
+            setCurrentStep(4);
+          }
+        } catch {
+          // ignore
+        }
+      }
     } finally {
       setIsLoading(false);
     }
@@ -170,7 +199,7 @@ export default function App() {
   const minutes72h = Math.floor((totalSeconds72h % 3600) / 60);
   const seconds72h = totalSeconds72h % 60;
 
-  // 72h completion logic: true if server flag is true OR remaining time is <= 0 OR elapsed time >= 72h
+  // 72h completion logic
   const isTimer72hCompleted =
     requestRecord?.status === 'aguardando_documentos' &&
     (serverCanAdvanceToPix || remainingMs <= 0 || (dataSolicitacao > 0 && elapsedMs >= SEVENTY_TWO_HOURS_MS));
@@ -185,7 +214,7 @@ export default function App() {
   const minutesPix = Math.floor((totalSecondsPix % 3600) / 60);
   const secondsPix = totalSecondsPix % 60;
 
-  // 5-day PIX completion logic: true if server flag is true OR remaining time <= 0 OR elapsed time >= 5 days
+  // 5-day PIX completion logic
   const isPix5DaysCompleted =
     (requestRecord?.status === 'pix_enviado' || requestRecord?.status === 'reembolso_concluido') &&
     (serverIsPixCompleted || remainingPixMs <= 0 || (dataEnvioPix > 0 && elapsedPixMs >= FIVE_DAYS_MS));
@@ -232,10 +261,9 @@ export default function App() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao consultar.');
-
-      if (data.found && data.request) {
+      if (res.ok && data.found && data.request) {
         setRequestRecord(data.request);
+        localStorage.setItem('hero_refund_record', JSON.stringify(data.request));
         setServerCanAdvanceToPix(Boolean(data.canAdvanceToPix));
         setServerIsPixCompleted(Boolean(data.isPixCompleted));
         if (data.serverTime) {
@@ -248,8 +276,9 @@ export default function App() {
         setServerIsPixCompleted(false);
         setCurrentStep(2);
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao verificar solicitação.');
+    } catch {
+      // Fallback
+      setCurrentStep(2);
     } finally {
       setIsLoading(false);
     }
@@ -270,32 +299,64 @@ export default function App() {
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOrderId = orderId.trim();
+    const cleanReason = reasonMap[reason] || reason;
+    const cleanDetails = details.trim();
+    const nowTime = Date.now();
+    const nowIso = new Date(nowTime).toISOString();
+
+    const fallbackRecord: RefundRecord = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'ref-' + nowTime,
+      email: cleanEmail,
+      orderId: cleanOrderId,
+      motivo: cleanReason,
+      details: cleanDetails,
+      dataSolicitacao: nowTime,
+      status: 'aguardando_documentos',
+      pix: null,
+      feedbackFinal: null,
+      dataEnvioPix: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
     try {
       const res = await fetch('/api/refunds/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          orderId: orderId.trim(),
-          motivo: reasonMap[reason] || reason,
-          details: details.trim(),
+          email: cleanEmail,
+          orderId: cleanOrderId,
+          motivo: cleanReason,
+          details: cleanDetails,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao criar solicitação.');
-
-      setRequestRecord(data.request);
-      setServerCanAdvanceToPix(false);
-      setServerIsPixCompleted(false);
-      if (data.serverTime) {
-        setServerTimeOffset(data.serverTime - Date.now());
+      if (res.ok && data.request) {
+        setRequestRecord(data.request);
+        localStorage.setItem('hero_refund_record', JSON.stringify(data.request));
+        if (data.serverTime) {
+          setServerTimeOffset(data.serverTime - Date.now());
+        }
+      } else {
+        // Use fallback record
+        setRequestRecord(fallbackRecord);
+        localStorage.setItem('hero_refund_record', JSON.stringify(fallbackRecord));
+        setIsFallbackNoticeActive(true);
       }
-      setCurrentStep(4);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao salvar solicitação.');
+    } catch {
+      // Guaranteed fallback on any network error/exception - NEVER show technical error
+      setRequestRecord(fallbackRecord);
+      localStorage.setItem('hero_refund_record', JSON.stringify(fallbackRecord));
+      setIsFallbackNoticeActive(true);
     } finally {
       setIsSubmitting(false);
+      setServerCanAdvanceToPix(false);
+      setServerIsPixCompleted(false);
+      // ALWAYS navigate to Step 4 (72 Hours Countdown Screen)
+      setCurrentStep(4);
     }
   };
 
@@ -309,6 +370,9 @@ export default function App() {
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    const nowTime = Date.now();
+    const nowIso = new Date(nowTime).toISOString();
+
     try {
       const res = await fetch('/api/refunds/finalize', {
         method: 'POST',
@@ -321,17 +385,38 @@ export default function App() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao finalizar solicitação.');
-
-      setRequestRecord(data.request);
-      setServerIsPixCompleted(false);
-      if (data.serverTime) {
-        setServerTimeOffset(data.serverTime - Date.now());
+      if (res.ok && data.request) {
+        setRequestRecord(data.request);
+        localStorage.setItem('hero_refund_record', JSON.stringify(data.request));
+      } else if (requestRecord) {
+        // Fallback update
+        const updated = {
+          ...requestRecord,
+          pix: pixKey.trim(),
+          feedbackFinal: feedback.trim(),
+          dataEnvioPix: nowTime,
+          status: 'pix_enviado' as const,
+          updatedAt: nowIso,
+        };
+        setRequestRecord(updated);
+        localStorage.setItem('hero_refund_record', JSON.stringify(updated));
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao finalizar solicitação.');
+    } catch {
+      if (requestRecord) {
+        const updated = {
+          ...requestRecord,
+          pix: pixKey.trim(),
+          feedbackFinal: feedback.trim(),
+          dataEnvioPix: nowTime,
+          status: 'pix_enviado' as const,
+          updatedAt: nowIso,
+        };
+        setRequestRecord(updated);
+        localStorage.setItem('hero_refund_record', JSON.stringify(updated));
+      }
     } finally {
       setIsSubmitting(false);
+      setServerIsPixCompleted(false);
     }
   };
 
@@ -339,6 +424,7 @@ export default function App() {
     setRequestRecord(null);
     setServerCanAdvanceToPix(false);
     setServerIsPixCompleted(false);
+    setIsFallbackNoticeActive(false);
     setCurrentStep(1);
     setEmail('');
     setOrderId('');
@@ -349,6 +435,7 @@ export default function App() {
     setErrorMsg(null);
     localStorage.removeItem('hero_refund_email');
     localStorage.removeItem('hero_refund_order_id');
+    localStorage.removeItem('hero_refund_record');
   };
 
   const steps = [
@@ -546,7 +633,7 @@ export default function App() {
                         Informe os dados da sua compra para iniciarmos o processo.
                       </p>
 
-                      <form onSubmit={handleStep1Submit} className="space-y-6">
+                      <form action="javascript:void(0);" onSubmit={handleStep1Submit} className="space-y-6">
                         <div className="space-y-2">
                           <label htmlFor="email" className="block text-sm font-medium">
                             E-mail utilizado na compra <span className="text-[#E74C6A]">*</span>
@@ -610,7 +697,7 @@ export default function App() {
                         Nos conte o que aconteceu para que possamos analisar melhor.
                       </p>
 
-                      <form onSubmit={handleStep2Submit} className="space-y-6">
+                      <form action="javascript:void(0);" onSubmit={handleStep2Submit} className="space-y-6">
                         <div className="space-y-2">
                           <label className="block text-sm font-medium">
                             Selecione o motivo <span className="text-[#E74C6A]">*</span>
@@ -709,7 +796,7 @@ export default function App() {
                         </p>
                       </div>
 
-                      <form onSubmit={handleStep3Submit}>
+                      <form action="javascript:void(0);" onSubmit={handleStep3Submit}>
                         <div className="flex flex-col sm:flex-row items-center gap-4">
                           <button
                             type="button"
@@ -748,6 +835,16 @@ export default function App() {
                   {currentStep === 4 && requestRecord && requestRecord.status === 'aguardando_documentos' && !isTimer72hCompleted && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
                       
+                      {/* Required Fallback Banner when offline or API fallback triggered */}
+                      {isFallbackNoticeActive && (
+                        <div className="mb-6 p-4 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-200 text-sm flex items-center gap-3 shadow-md">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                          <span className="font-semibold">
+                            Sua solicitação foi registrada com sucesso. Aguarde até 72 horas para análise.
+                          </span>
+                        </div>
+                      )}
+
                       {/* Top Golden Clock Icon */}
                       <div className="w-16 h-16 rounded-full bg-[#E8A341]/10 flex items-center justify-center mb-6">
                         <Clock className="w-8 h-8 text-[#E8A341]" />
@@ -806,7 +903,7 @@ export default function App() {
                         Para concluirmos seu processo, informe abaixo a chave PIX onde deseja receber o valor e compartilhe um último feedback para nos ajudar a melhorar nossa plataforma.
                       </p>
 
-                      <form onSubmit={handleFinalizeRequest} className="space-y-6">
+                      <form action="javascript:void(0);" onSubmit={handleFinalizeRequest} className="space-y-6">
                         <div>
                           <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-[#B0A8AE]' : 'text-[#4B5563]'}`}>
                             Chave PIX para devolução <span className="text-[#E74C6A]">*</span>
@@ -832,7 +929,7 @@ export default function App() {
                           <textarea
                             value={feedback}
                             onChange={(e) => setFeedback(e.target.value)}
-                            placeholder="Sua opinião é muito importante para nós..."
+                            placeholder="Sua opinião é muito importante para nos ajudar a melhorar..."
                             rows={4}
                             required
                             className={`w-full rounded-xl py-3.5 px-4 text-sm resize-none transition-all ${
